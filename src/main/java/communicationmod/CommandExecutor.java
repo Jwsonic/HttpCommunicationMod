@@ -123,7 +123,7 @@ public class CommandExecutor {
         } else if (command.equals("skip") || command.equals("cancel") || command.equals("return") || command.equals("leave")) {
             return isCancelCommandAvailable();
         } else {
-            return getAvailableCommands().contains(command);
+            return command.equals("start") || getAvailableCommands().contains(command);
         }
     }
 
