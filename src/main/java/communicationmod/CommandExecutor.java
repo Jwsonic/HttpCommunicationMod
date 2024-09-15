@@ -78,6 +78,9 @@ public class CommandExecutor {
             case "wait":
                 executeWaitCommand(tokens);
                 return true;
+            case "reset":
+                executeStartOver(tokens);
+                return true;
 
             default:
                 logger.info("This should never happen.");
@@ -123,7 +126,7 @@ public class CommandExecutor {
         } else if (command.equals("skip") || command.equals("cancel") || command.equals("return") || command.equals("leave")) {
             return isCancelCommandAvailable();
         } else {
-            return command.equals("start") || getAvailableCommands().contains(command);
+            return command.equals("reset") || getAvailableCommands().contains(command);
         }
     }
 
@@ -466,6 +469,16 @@ public class CommandExecutor {
             throw new InvalidCommandException(tokens, InvalidCommandException.InvalidCommandFormat.OUT_OF_BOUNDS, tokens[1]);
         }
         GameStateListener.setTimeout(timeout);
+    }
+
+    private static void executeStartOver(String[] tokens) {
+        //Copying the functionality from VictoryScreen.update(), always skipping credits
+        AbstractDungeon.unlocks.clear();
+        Settings.isTrial = false;
+        Settings.isDailyRun = false;
+        Settings.isEndless = false;
+        CardCrawlGame.trial = null;
+        CardCrawlGame.startOver();
     }
 
     private static int getKeycode(String keyName) {
