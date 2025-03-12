@@ -5,7 +5,7 @@
 
     <groupId>autoplay</groupId>
     <artifactId>CommunicationMod</artifactId>
-    <version>2.2.0</version>
+    <version>3.0.0</version>
     <packaging>jar</packaging>
     <name>Bot Communication Mod</name>
     <description>Used to help external programs communicate with Slay the Spire</description>
