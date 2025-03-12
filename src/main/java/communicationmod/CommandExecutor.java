@@ -479,6 +479,8 @@ public class CommandExecutor {
         Settings.isEndless = false;
         CardCrawlGame.trial = null;
         CardCrawlGame.startOver();
+
+        GameStateListener.setTimeout(200);
     }
 
     private static int getKeycode(String keyName) {
