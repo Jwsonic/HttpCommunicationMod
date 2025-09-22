@@ -1,5 +1,15 @@
 ## Changelog ##
 
+#### v3.0.0 ####
+* **BREAKING CHANGE**: Complete rewrite as HttpCommunicationMod with HTTP API
+* Removed subprocess-based communication entirely
+* Added REST endpoints: GET /state, POST /command, GET /health
+* Added support for multiple concurrent clients
+* Improved error handling with structured JSON responses
+* Added comprehensive HTTP API documentation
+* Renamed mod from CommunicationMod to HttpCommunicationMod
+* All existing automation scripts will need to be updated to use HTTP instead of subprocess
+
 #### v1.2.1 ####
 * Fix an issue where the external process was not sent state
 
