@@ -27,6 +27,9 @@ public class StateHandler implements HttpHandler {
             // Get current game state
             String gameState = HttpCommunicationMod.getCurrentGameState();
 
+            // Log game state to file
+            HttpCommunicationMod.logGameState(gameState);
+
             // Set response headers
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");

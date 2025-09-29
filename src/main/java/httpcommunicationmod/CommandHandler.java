@@ -37,6 +37,9 @@ public class CommandHandler implements HttpHandler {
 
             logger.info("Executing command: " + command);
 
+            // Log command to file
+            HttpCommunicationMod.logCommand(command.trim());
+
             // Execute command and get response
             HashMap<String, Object> response = executeCommand(command.trim());
 

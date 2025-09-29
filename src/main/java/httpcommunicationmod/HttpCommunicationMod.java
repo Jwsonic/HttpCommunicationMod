@@ -5,9 +5,7 @@ import basemod.interfaces.PostDungeonUpdateSubscriber;
 import basemod.interfaces.PostInitializeSubscriber;
 import basemod.interfaces.PostUpdateSubscriber;
 import basemod.interfaces.PreUpdateSubscriber;
-import com.evacipated.cardcrawl.modthespire.lib.SpireConfig;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
-import com.google.gson.Gson;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.FontHelper;
@@ -16,13 +14,18 @@ import httpcommunicationmod.patches.InputActionPatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Properties;
+import java.util.Date;
 
 @SpireInitializer
-public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdateSubscriber, PostDungeonUpdateSubscriber, PreUpdateSubscriber, OnStateChangeSubscriber {
+public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdateSubscriber,
+        PostDungeonUpdateSubscriber, PreUpdateSubscriber, OnStateChangeSubscriber {
 
     private static final Logger logger = LogManager.getLogger(HttpCommunicationMod.class.getName());
     private static final String MODNAME = "HTTP Communication Mod";
@@ -31,32 +34,21 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     public static boolean mustSendGameState = false;
     private static ArrayList<OnStateChangeSubscriber> onStateChangeSubscribers;
 
-    private static SpireConfig communicationConfig;
-    private static final String WEB_SERVER_PORT_OPTION = "webServerPort";
-    private static final String WEB_SERVER_HOST_OPTION = "webServerHost";
-    private static final String VERBOSE_OPTION = "verbose";
     private static final int DEFAULT_PORT = 8080;
     private static final String DEFAULT_HOST = "localhost";
     private static final boolean DEFAULT_VERBOSITY = true;
+    private static final String DEFAULT_LOG_PATH = "http_mod.log";
 
     private static WebServer webServer;
+    private static String logFilePath;
+    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    public HttpCommunicationMod(){
+    public HttpCommunicationMod() {
         BaseMod.subscribe(this);
         onStateChangeSubscribers = new ArrayList<>();
         HttpCommunicationMod.subscribe(this);
 
-        try {
-            Properties defaults = new Properties();
-            defaults.put(WEB_SERVER_PORT_OPTION, Integer.toString(DEFAULT_PORT));
-            defaults.put(WEB_SERVER_HOST_OPTION, DEFAULT_HOST);
-            defaults.put(VERBOSE_OPTION, Boolean.toString(DEFAULT_VERBOSITY));
-            communicationConfig = new SpireConfig("HttpCommunicationMod", "config", defaults);
-            communicationConfig.save();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        initializeLogFile();
         startWebServer();
     }
 
@@ -74,7 +66,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     }
 
     public static void publishOnGameStateChange() {
-        for(OnStateChangeSubscriber sub : onStateChangeSubscribers) {
+        for (OnStateChangeSubscriber sub : onStateChangeSubscribers) {
             sub.receiveOnStateChange();
         }
     }
@@ -87,7 +79,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     public static void queueCommand(String command) {
         try {
             boolean stateChanged = CommandExecutor.executeCommand(command);
-            if(stateChanged) {
+            if (stateChanged) {
                 GameStateListener.registerCommandExecution();
             }
         } catch (InvalidCommandException e) {
@@ -100,10 +92,10 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     }
 
     public void receivePostUpdate() {
-        if(!mustSendGameState && GameStateListener.checkForMenuStateChange()) {
+        if (!mustSendGameState && GameStateListener.checkForMenuStateChange()) {
             mustSendGameState = true;
         }
-        if(mustSendGameState) {
+        if (mustSendGameState) {
             publishOnGameStateChange();
             mustSendGameState = false;
         }
@@ -114,7 +106,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         if (GameStateListener.checkForDungeonStateChange()) {
             mustSendGameState = true;
         }
-        if(AbstractDungeon.getCurrRoom().isBattleOver) {
+        if (AbstractDungeon.getCurrRoom().isBattleOver) {
             GameStateListener.signalTurnEnd();
         }
     }
@@ -146,33 +138,27 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         ModLabel restartServerLabel = new ModLabel(
                 "Restart Web Server",
                 475, 700, Settings.CREAM_COLOR, FontHelper.charDescFont,
-                settingsPanel, modLabel -> {});
+                settingsPanel, modLabel -> {
+                });
         settingsPanel.addUIElement(restartServerLabel);
 
-        ModLabeledToggleButton verbosityOption = new ModLabeledToggleButton(
-                "Suppress verbose log output",
+        ModLabel envVarLabel = new ModLabel(
+                "Configuration via environment variables: HTTP_MOD_PORT, HTTP_MOD_HOST, HTTP_MOD_LOG_PATH",
                 350, 500, Settings.CREAM_COLOR, FontHelper.charDescFont,
-                getVerbosityOption(), settingsPanel, modLabel -> {},
-                modToggleButton -> {
-                    if (communicationConfig != null) {
-                        communicationConfig.setBool(VERBOSE_OPTION, modToggleButton.enabled);
-                        try {
-                            communicationConfig.save();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
+                settingsPanel, modLabel -> {
                 });
-        settingsPanel.addUIElement(verbosityOption);
+        settingsPanel.addUIElement(envVarLabel);
 
-        BaseMod.registerModBadge(ImageMaster.loadImage("Icon.png"), "HTTP Communication Mod", "Forgotten Arbiter", null, settingsPanel);
+        BaseMod.registerModBadge(ImageMaster.loadImage("Icon.png"), "HTTP Communication Mod", "Forgotten Arbiter", null,
+                settingsPanel);
     }
 
     private boolean startWebServer() {
         try {
             webServer = new WebServer();
             webServer.start(getWebServerHost(), getWebServerPort());
-            logger.info("HTTP Communication Mod web server started on " + getWebServerHost() + ":" + getWebServerPort());
+            logger.info(
+                    "HTTP Communication Mod web server started on " + getWebServerHost() + ":" + getWebServerPort());
             return true;
         } catch (Exception e) {
             logger.error("Failed to start web server: " + e.getMessage());
@@ -190,33 +176,96 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
 
     public static void dispose() {
         logger.info("Shutting down web server...");
-        if(webServer != null) {
+        if (webServer != null) {
             webServer.stop();
         }
     }
 
     private static int getWebServerPort() {
-        if (communicationConfig == null) {
-            return DEFAULT_PORT;
+        String envPort = System.getenv("HTTP_MOD_PORT");
+        if (envPort != null && !envPort.trim().isEmpty()) {
+            try {
+                int port = Integer.parseInt(envPort.trim());
+                logger.info("Using HTTP_MOD_PORT environment variable: " + port);
+                return port;
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid HTTP_MOD_PORT value '" + envPort + "', using default: " + DEFAULT_PORT);
+            }
         }
-        return communicationConfig.getInt(WEB_SERVER_PORT_OPTION);
+
+        logger.info("Using default port: " + DEFAULT_PORT);
+        return DEFAULT_PORT;
     }
 
     private static String getWebServerHost() {
-        if (communicationConfig == null) {
-            return DEFAULT_HOST;
+        String envHost = System.getenv("HTTP_MOD_HOST");
+        if (envHost != null && !envHost.trim().isEmpty()) {
+            logger.info("Using HTTP_MOD_HOST environment variable: " + envHost.trim());
+            return envHost.trim();
         }
-        return communicationConfig.getString(WEB_SERVER_HOST_OPTION);
+
+        logger.info("Using default host: " + DEFAULT_HOST);
+        return DEFAULT_HOST;
     }
 
     private static boolean getVerbosityOption() {
-        if (communicationConfig == null) {
-            return DEFAULT_VERBOSITY;
-        }
-        return communicationConfig.getBool(VERBOSE_OPTION);
+        return DEFAULT_VERBOSITY;
     }
 
     public static String getCurrentGameState() {
         return GameStateConverter.getCommunicationState();
+    }
+
+    private void initializeLogFile() {
+        String envLogPath = System.getenv("HTTP_MOD_LOG_PATH");
+        if (envLogPath != null && !envLogPath.trim().isEmpty()) {
+            logFilePath = envLogPath.trim();
+            logger.info("Using HTTP_MOD_LOG_PATH environment variable: " + logFilePath);
+        } else {
+            logFilePath = DEFAULT_LOG_PATH;
+            logger.info("HTTP_MOD_LOG_PATH environment variable not set, using default: " + logFilePath);
+        }
+
+        try {
+            if (logFilePath.contains("/") || logFilePath.contains("\\")) {
+                String directory = Paths.get(logFilePath).getParent().toString();
+                Files.createDirectories(Paths.get(directory));
+            }
+            logger.info("File logging initialized with path: " + logFilePath);
+        } catch (IOException e) {
+            logger.error("Failed to initialize log file directory: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static void logGameState(String gameState) {
+        if (logFilePath == null)
+            return;
+
+        String timestamp = dateFormat.format(new Date());
+        String logEntry = String.format("[%s] GAME_STATE: %s%n", timestamp, gameState);
+        writeToLogFile(logEntry);
+    }
+
+    public static void logCommand(String command) {
+        if (logFilePath == null)
+            return;
+
+        String timestamp = dateFormat.format(new Date());
+        String logEntry = String.format("[%s] COMMAND: %s%n", timestamp, command);
+        writeToLogFile(logEntry);
+    }
+
+    private static void writeToLogFile(String content) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(logFilePath, true))) {
+            writer.print(content);
+        } catch (IOException e) {
+            logger.error("Failed to write to log file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static String getCurrentLogPath() {
+        return logFilePath;
     }
 }
