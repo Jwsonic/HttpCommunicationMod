@@ -1,4 +1,7 @@
 # HttpCommunicationMod
+
+> **This is a fork of the [original CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) that has been completely rewritten to use HTTP instead of subprocess communication.**
+
 Slay the Spire mod that provides an HTTP API for allowing external programs to control the game
 
 ## Requirements
@@ -11,7 +14,7 @@ Slay the Spire mod that provides an HTTP API for allowing external programs to c
 
 1. Copy HttpCommunicationMod.jar to your ModTheSpire mods directory
 2. Run ModTheSpire with HttpCommunicationMod enabled
-3. The mod will automatically start an HTTP server on `localhost:8080` (configurable)
+3. The mod will automatically start an HTTP server on `localhost:8080` (configurable via environment variables)
 4. Use HTTP requests to interact with the game
 
 ## What does this mod do?
@@ -20,8 +23,9 @@ HttpCommunicationMod starts an embedded HTTP server and provides REST API endpoi
 
 ## API Endpoints
 
+
 ### `GET /state`
-Returns the current game state as JSON.
+Returns the current game state as JSON. This endpoint also automatically logs the game state to the configured log file.
 
 **Example Request:**
 ```bash
@@ -35,19 +39,17 @@ curl http://localhost:8080/state
   "ready_for_command": true,
   "in_game": true,
   "game_state": {
-    "screen_type": "NONE",
-    "screen_state": {},
-    "seed": -3047511808784702860,
+    "screen_type": "COMBAT",
     "combat_state": {
-      "draw_pile": [...],
-      "hand": [...],
-      "monsters": [...],
       "player": {
         "current_hp": 68,
         "max_hp": 75,
         "energy": 3,
         "block": 0
-      }
+      },
+      "hand": [...],
+      "monsters": [...],
+      "draw_pile": [...]
     },
     "floor": 1,
     "act": 1,
@@ -58,22 +60,22 @@ curl http://localhost:8080/state
 ```
 
 ### `POST /command`
-Executes a game command and returns the result along with updated game state.
+Executes a game command and returns the result along with updated game state. Commands are automatically logged to the configured log file.
+
+**Request:** Plain text command in request body
 
 **Example Request:**
 ```bash
 curl -X POST http://localhost:8080/command -d "play 1"
 ```
 
-**Example Response:**
+**Success Response:**
 ```json
 {
   "success": true,
   "command": "play 1",
   "state_changed": true,
-  "game_state": {
-    // Updated game state after command execution
-  }
+  "game_state": { ... }
 }
 ```
 
@@ -83,14 +85,12 @@ curl -X POST http://localhost:8080/command -d "play 1"
   "success": false,
   "error": "Invalid command: play 99. Card index out of bounds.",
   "command": "play 99",
-  "game_state": {
-    // Current game state even on error
-  }
+  "game_state": { ... }
 }
 ```
 
 ### `GET /health`
-Health check endpoint for monitoring server status.
+Returns server status and metadata for monitoring.
 
 **Example Response:**
 ```json
@@ -136,21 +136,49 @@ The HTTP API supports all the same commands as the previous subprocess version:
 
 ## Configuration
 
-The mod creates a configuration file that can be edited to customize the HTTP server:
+### Environment Variables
 
-**Location:** `(Slay the Spire folder)/preferences/HttpCommunicationMod-config.properties`
+The mod uses environment variables for configuration (no config files are created or used):
 
-**Default Configuration:**
-```properties
-webServerPort=8080
-webServerHost=localhost
-verbose=true
+- **`HTTP_MOD_PORT`**: Optional. Specifies the port for the web server. If not set, defaults to 8080.
+  - Example: `HTTP_MOD_PORT=9000`
+  - Must be a valid integer port number
+
+- **`HTTP_MOD_HOST`**: Optional. Specifies the host/IP address for the web server. If not set, defaults to localhost.
+  - Example: `HTTP_MOD_HOST=0.0.0.0` (bind to all interfaces)
+  - Example: `HTTP_MOD_HOST=127.0.0.1` (localhost only)
+
+- **`HTTP_MOD_LOG_PATH`**: Optional. Specifies the path for logging game state and commands. If not set, defaults to `http_mod.log` in the current directory.
+  - Example: `HTTP_MOD_LOG_PATH=/path/to/custom/logfile.log`
+  - Supports absolute paths and will create necessary directories
+  - Logs are appended with timestamps in format: `[YYYY-MM-DD HH:mm:ss] TYPE: content`
+
+### Configuration System
+
+The mod uses a simple two-tier configuration system:
+
+1. **Environment Variables** (highest priority) - Checked first if set
+2. **Built-in Defaults** (fallback) - Used when environment variables are not set
+
+**Built-in Defaults:**
+- Port: `8080`
+- Host: `localhost`
+- Log Path: `http_mod.log`
+
+**No Config Files:** The mod does not use or create any configuration files. All configuration is done through environment variables or defaults, making it perfect for containerized environments, CI/CD systems, and deployments where file system access may be restricted.
+
+### Automatic Logging
+
+The mod automatically logs:
+- **Game State**: Every time `/state` is requested (like the old DataWriter)
+- **Commands**: Every command received via `/command` (like the old DataReader)
+
+Example log entries:
 ```
-
-**Configuration Options:**
-- `webServerPort`: Port number for the HTTP server (default: 8080)
-- `webServerHost`: Host address to bind to (default: localhost)
-- `verbose`: Enable detailed logging (default: true)
+[2025-01-15 14:30:25] GAME_STATE: {"available_commands":["play","end"],"ready_for_command":true,...}
+[2025-01-15 14:30:26] COMMAND: play 1
+[2025-01-15 14:30:27] GAME_STATE: {"available_commands":["end"],"ready_for_command":true,...}
+```
 
 ## Client Examples
 
@@ -223,22 +251,6 @@ curl -X POST http://localhost:8080/command -d "start silent 10"
 curl http://localhost:8080/health
 ```
 
-## Migration from Previous Version
-
-If you were using the previous subprocess-based CommunicationMod, you'll need to update your automation scripts:
-
-### Key Changes:
-1. **No subprocess management** - Connect directly via HTTP
-2. **Pull-based state** - Get state via `GET /state` instead of receiving automatic updates
-3. **Request/response model** - Send commands via `POST /command` and receive immediate responses
-4. **Structured errors** - HTTP status codes and JSON error responses
-5. **Multiple clients** - Multiple programs can connect simultaneously
-
-### Migration Steps:
-1. Replace subprocess launching code with HTTP client
-2. Change from stdin/stdout communication to HTTP requests
-3. Update error handling to parse JSON error responses
-4. Modify state monitoring to poll `GET /state` or implement event-based polling
 
 ## Known Limitations
 
@@ -257,9 +269,10 @@ If you were using the previous subprocess-based CommunicationMod, you'll need to
 
 ### Common Issues
 - **Connection refused**: Check that the mod is loaded and the server started successfully
-- **Port in use**: Change the `webServerPort` in the configuration file
+- **Port in use**: Set the `HTTP_MOD_PORT` environment variable to a different port
 - **Command errors**: Check the HTTP response JSON for detailed error messages
 - **State not updating**: Ensure you're polling `/state` after commands that change game state
+- **Configuration not working**: Remember this mod uses environment variables, not config files
 
 ### Testing the API
 Use the `/health` endpoint to verify the server is running:
@@ -278,13 +291,16 @@ curl http://localhost:8080/health
 
 ## Version History
 
-### v3.0.0
-- **BREAKING CHANGE**: Complete rewrite using HTTP API instead of subprocess communication
+### v3.0.0 (Fork)
+- **COMPLETE REWRITE/FORK**: Forked from [original CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) with entirely new HTTP API
+- **BREAKING CHANGE**: No backwards compatibility with original subprocess-based API
 - Added REST endpoints: `/state`, `/command`, `/health`
-- Removed subprocess and stdio dependencies
-- Added support for multiple concurrent clients
-- Improved error handling with structured JSON responses
-- Added health check endpoint for monitoring
+- Replaced subprocess communication with embedded HTTP server
+- Environment variable configuration system (no config files)
+- Automatic logging to configurable log files
+- Support for multiple concurrent clients
+- Structured JSON error responses with HTTP status codes
+- Health check endpoint for monitoring and deployment automation
 
 ## Contributing
 
@@ -292,8 +308,6 @@ This mod is open source. Contributions, bug reports, and feature requests are we
 
 ## Credits
 
-- **Original Author**: Forgotten Arbiter
-- **HTTP Rewrite**: Updated for modern API-based communication
-- **Community**: Thanks to all users who provided feedback and testing
+- **Original CommunicationMod**: [Forgotten Arbiter](https://github.com/ForgottenArbiter/CommunicationMod)
 
 For more information about Slay the Spire modding, visit the [ModTheSpire wiki](https://github.com/kiooeht/ModTheSpire/wiki).
