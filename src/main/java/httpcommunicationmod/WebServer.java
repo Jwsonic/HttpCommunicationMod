@@ -23,6 +23,8 @@ public class WebServer {
         // Set up endpoints
         server.createContext("/state", new StateHandler());
         server.createContext("/command", new CommandHandler());
+        server.createContext("/start", new StartHandler());
+        server.createContext("/reset", new ResetHandler());
         server.createContext("/health", new HealthHandler());
 
         // Use a thread pool for handling requests

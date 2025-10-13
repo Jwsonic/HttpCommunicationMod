@@ -21,21 +21,33 @@ Slay the Spire mod that provides an HTTP API for allowing external programs to c
 
 HttpCommunicationMod starts an embedded HTTP server and provides REST API endpoints for external programs to monitor and control Slay the Spire. The mod replaces the previous subprocess-based communication with a modern HTTP API.
 
-## API Endpoints
+## API Reference
 
+HttpCommunicationMod provides a REST API with four main endpoints for interacting with Slay the Spire.
 
 ### `GET /state`
-Returns the current game state as JSON. This endpoint also automatically logs the game state to the configured log file.
+
+Returns the current game state as JSON. This endpoint automatically logs the game state to the configured log file.
+
+**HTTP Method:** `GET`
+
+**Request:** No request body required
+
+**Response:** JSON object containing:
+- `available_commands`: Array of specific available commands (e.g., `["play 1", "play 2 0", "end"]`)
+- `ready_for_command`: Boolean indicating if the game is ready to accept commands
+- `in_game`: Boolean indicating if currently in a game
+- `game_state`: Object containing detailed game state information
 
 **Example Request:**
 ```bash
 curl http://localhost:8080/state
 ```
 
-**Example Response:**
+**Success Response (200 OK):**
 ```json
 {
-  "available_commands": ["play", "end", "key", "click", "wait", "state"],
+  "available_commands": ["play 1", "play 2 0", "end"],
   "ready_for_command": true,
   "in_game": true,
   "game_state": {
@@ -59,17 +71,33 @@ curl http://localhost:8080/state
 }
 ```
 
+**Error Responses:**
+- `405 Method Not Allowed`: Wrong HTTP method used
+- `500 Internal Server Error`: Server error occurred
+
+---
+
 ### `POST /command`
+
 Executes a game command and returns the result along with updated game state. Commands are automatically logged to the configured log file.
 
-**Request:** Plain text command in request body
+**HTTP Method:** `POST`
+
+**Request:** Plain text command in request body (e.g., `"play 1"`, `"end"`, `"choose 0"`)
+
+**Response:** JSON object containing:
+- `success`: Boolean indicating if command succeeded
+- `command`: Echo of the command that was executed
+- `state_changed`: Boolean indicating if the command changed game state (only on success)
+- `game_state`: Current game state after command execution
+- `error`: Error message (only on failure)
 
 **Example Request:**
 ```bash
 curl -X POST http://localhost:8080/command -d "play 1"
 ```
 
-**Success Response:**
+**Success Response (200 OK):**
 ```json
 {
   "success": true,
@@ -79,7 +107,7 @@ curl -X POST http://localhost:8080/command -d "play 1"
 }
 ```
 
-**Error Response:**
+**Error Response (200 OK with error details):**
 ```json
 {
   "success": false,
@@ -89,26 +117,140 @@ curl -X POST http://localhost:8080/command -d "play 1"
 }
 ```
 
-### `GET /health`
-Returns server status and metadata for monitoring.
+**Error Responses:**
+- `400 Bad Request`: Empty command body
+- `405 Method Not Allowed`: Wrong HTTP method used
+- `500 Internal Server Error`: Server error occurred
 
-**Example Response:**
+---
+
+### `POST /start`
+
+Starts a new game with specified character, ascension level, and optional seed. This endpoint replaces the old text-based `START` command with a dedicated HTTP endpoint.
+
+**HTTP Method:** `POST`
+
+**Request:** JSON object with the following fields:
+- `character` (required): Character name - valid values: `"IRONCLAD"`, `"THE_SILENT"`, `"SILENT"`, `"DEFECT"`, `"WATCHER"`
+- `ascension_level` (optional): Integer from 0-20, defaults to 0
+- `seed` (optional): Alphanumeric seed string (letters and numbers only)
+
+**Response:** JSON object containing:
+- `success`: Boolean indicating if game start succeeded
+- `character`: Character class name that was selected
+- `ascension_level`: Ascension level of the game
+- `seed`: Numeric seed value (long)
+- `seed_string`: Human-readable seed string
+- `error`: Error message (only on failure)
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8080/start \
+  -H "Content-Type: application/json" \
+  -d '{"character": "IRONCLAD", "ascension_level": 15, "seed": "TESTRUN"}'
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "character": "IRONCLAD",
+  "ascension_level": 15,
+  "seed": 123456789,
+  "seed_string": "TESTRUN"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "success": false,
+  "error": "Missing required field: character"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid JSON, missing character field, invalid character name, ascension level out of bounds (0-20), or invalid seed format
+- `405 Method Not Allowed`: Wrong HTTP method used
+- `500 Internal Server Error`: Server error occurred
+
+---
+
+### `POST /reset`
+
+Resets the game and returns to the main menu. This endpoint replaces the old text-based `RESET` command with a dedicated HTTP endpoint.
+
+**HTTP Method:** `POST`
+
+**Request:** No request body required
+
+**Response:** `204 No Content` on success (no response body)
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8080/reset
+```
+
+**Success Response (204 No Content):**
+No response body
+
+**Error Responses:**
+- `405 Method Not Allowed`: Wrong HTTP method used
+- `500 Internal Server Error`: Server error occurred
+
+**Behavior:**
+- Clears any pending unlocks from the current run
+- Resets all game mode flags (Trial, Daily Run, Endless)
+- Returns to the character selection/main menu screen
+- Equivalent to finishing a run and returning to the main menu
+
+---
+
+### `GET /health`
+
+Returns server status and metadata for monitoring and health checks.
+
+**HTTP Method:** `GET`
+
+**Request:** No request body required
+
+**Response:** JSON object containing:
+- `status`: Health status string (e.g., `"healthy"`)
+- `mod_name`: Name of the mod
+- `version`: Version string
+- `endpoints`: Array of available endpoint paths
+
+**Example Request:**
+```bash
+curl http://localhost:8080/health
+```
+
+**Success Response (200 OK):**
 ```json
 {
   "status": "healthy",
   "mod_name": "HTTP Communication Mod",
   "version": "3.0.0",
-  "endpoints": ["/state", "/command", "/health"]
+  "endpoints": ["/state", "/command", "/start", "/reset", "/health"]
 }
 ```
 
+**Error Responses:**
+- `405 Method Not Allowed`: Wrong HTTP method used
+- `500 Internal Server Error`: Server error occurred
+
 ## Available Commands
 
-The HTTP API supports all the same commands as the previous subprocess version:
+The `/command` endpoint accepts text-based commands to control the game. The `available_commands` field in the `/state` response now returns **enumerated specific commands** for the current game state, rather than command categories.
+
+**Example:** Instead of returning `["play", "end"]`, the API now returns specific commands like `["play 1", "play 2 0", "play 3", "end"]` - showing exactly which cards can be played and against which targets.
+
+**Note:** The following commands are intentionally excluded from `available_commands`:
+- `start` - Starting games is now done via the dedicated `POST /start` endpoint (see API Reference above)
+- `reset` - Resetting the game is now done via the dedicated `POST /reset` endpoint (see API Reference above)
+- `key`, `click`, `wait` - Low-level input commands that are still available via `/command` but not enumerated in state responses
 
 ### Game Control Commands
-- **START PlayerClass [AscensionLevel] [Seed]** - Starts a new game
-  - Example: `START IRONCLAD 15 ABC123`
 - **PLAY CardIndex [TargetIndex]** - Plays a card from hand
   - Example: `PLAY 1 0` (play first card targeting first monster)
 - **END** - Ends your turn
@@ -129,10 +271,6 @@ The HTTP API supports all the same commands as the previous subprocess version:
 - **CLICK Left|Right X Y [Timeout]** - Simulates mouse clicks
   - Coordinates are in 1920x1080 resolution regardless of actual screen size
 - **WAIT Timeout** - Waits for specified frames or state change
-
-### Utility Commands
-- **STATE** - Forces immediate state response
-- **RESET** - Restarts the game
 
 ## Configuration
 
@@ -187,6 +325,16 @@ Example log entries:
 import requests
 import json
 
+# Start a new game
+start_response = requests.post('http://localhost:8080/start',
+    json={
+        'character': 'IRONCLAD',
+        'ascension_level': 10,
+        'seed': 'MYRUN123'
+    })
+start_result = start_response.json()
+print(f"Game started: {start_result['success']}, Seed: {start_result['seed_string']}")
+
 # Get current game state
 response = requests.get('http://localhost:8080/state')
 game_state = response.json()
@@ -204,6 +352,19 @@ else:
 ### JavaScript/Node.js Example
 ```javascript
 const axios = require('axios');
+
+async function startGame(character, ascensionLevel = 0, seed = null) {
+    try {
+        const response = await axios.post('http://localhost:8080/start', {
+            character: character,
+            ascension_level: ascensionLevel,
+            seed: seed
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error starting game:', error);
+    }
+}
 
 async function getGameState() {
     try {
@@ -225,6 +386,10 @@ async function executeCommand(command) {
 
 // Usage
 (async () => {
+    // Start a new game
+    const startResult = await startGame('DEFECT', 15, 'TESTRUN');
+    console.log('Game started:', startResult.success);
+
     const state = await getGameState();
     console.log('Current HP:', state.game_state.current_hp);
 
@@ -235,6 +400,11 @@ async function executeCommand(command) {
 
 ### cURL Examples
 ```bash
+# Start new game as Silent on Ascension 10
+curl -X POST http://localhost:8080/start \
+  -H "Content-Type: application/json" \
+  -d '{"character": "SILENT", "ascension_level": 10, "seed": "TESTRUN"}'
+
 # Get game state
 curl http://localhost:8080/state
 
@@ -244,8 +414,8 @@ curl -X POST http://localhost:8080/command -d "play 1"
 # End turn
 curl -X POST http://localhost:8080/command -d "end"
 
-# Start new game as Silent on Ascension 10
-curl -X POST http://localhost:8080/command -d "start silent 10"
+# Reset game and return to main menu
+curl -X POST http://localhost:8080/reset
 
 # Check server health
 curl http://localhost:8080/health
@@ -291,10 +461,18 @@ curl http://localhost:8080/health
 
 ## Version History
 
+### v3.1.0 (Upcoming)
+- **NEW**: Added dedicated `POST /reset` endpoint for resetting the game and returning to main menu
+- **BREAKING CHANGE**: Removed `reset` command from `/command` endpoint - reset is now only available via `POST /reset` endpoint
+- Updated `/health` endpoint to include `/reset` in endpoints list
+
 ### v3.0.0 (Fork)
 - **COMPLETE REWRITE/FORK**: Forked from [original CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) with entirely new HTTP API
 - **BREAKING CHANGE**: No backwards compatibility with original subprocess-based API
-- Added REST endpoints: `/state`, `/command`, `/health`
+- Added REST endpoints: `/state`, `/command`, `/start`, `/health`
+- **NEW**: Dedicated `POST /start` endpoint for starting games with JSON request/response format
+- **CHANGED**: `available_commands` now returns enumerated specific commands (e.g., `"play 1"`, `"play 2 0"`) instead of command categories
+- Moved START command from text-based `/command` interface to dedicated `/start` HTTP endpoint
 - Replaced subprocess communication with embedded HTTP server
 - Environment variable configuration system (no config files)
 - Automatic logging to configurable log files

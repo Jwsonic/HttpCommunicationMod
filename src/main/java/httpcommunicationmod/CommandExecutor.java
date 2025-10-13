@@ -66,9 +66,6 @@ public class CommandExecutor {
             case "start":
                 executeStartCommand(tokens);
                 return true;
-            case "state":
-                executeStateCommand();
-                return false;
             case "key":
                 executeKeyCommand(tokens);
                 return true;
@@ -77,9 +74,6 @@ public class CommandExecutor {
                 return true;
             case "wait":
                 executeWaitCommand(tokens);
-                return true;
-            case "reset":
-                executeStartOver(tokens);
                 return true;
 
             default:
@@ -90,33 +84,40 @@ public class CommandExecutor {
 
     public static ArrayList<String> getAvailableCommands() {
         ArrayList<String> availableCommands = new ArrayList<>();
+
+        // Enumerate all play commands (e.g., "play 1", "play 1 0", "play 2 1")
         if (isPlayCommandAvailable()) {
-            availableCommands.add("play");
+            availableCommands.addAll(getPlayCommands());
         }
+
+        // Enumerate all choose commands (e.g., "choose 0", "choose skip")
         if (isChooseCommandAvailable()) {
-            availableCommands.add("choose");
+            availableCommands.addAll(getChooseCommands());
         }
+
+        // Add end command
         if (isEndCommandAvailable()) {
             availableCommands.add("end");
         }
+
+        // Enumerate all potion commands (e.g., "potion use 0", "potion use 0 1", "potion discard 0")
         if (isPotionCommandAvailable()) {
-            availableCommands.add("potion");
+            availableCommands.addAll(getPotionCommands());
         }
+
+        // Add confirm/proceed command with canonical name
         if (isConfirmCommandAvailable()) {
             availableCommands.add(ChoiceScreenUtils.getConfirmButtonText());
         }
+
+        // Add skip/cancel/return/leave command with canonical name
         if (isCancelCommandAvailable()) {
             availableCommands.add(ChoiceScreenUtils.getCancelButtonText());
         }
-        if (isStartCommandAvailable()) {
-            availableCommands.add("start");
-        }
-        if (isInDungeon()) {
-            availableCommands.add("key");
-            availableCommands.add("click");
-            availableCommands.add("wait");
-        }
-        availableCommands.add("state");
+
+        // Note: 'start' and 'reset' have been moved to their own endpoints
+        // 'key', 'click', and 'wait' are low-level commands not included in available_commands
+
         return availableCommands;
     }
 
@@ -126,7 +127,7 @@ public class CommandExecutor {
         } else if (command.equals("skip") || command.equals("cancel") || command.equals("return") || command.equals("leave")) {
             return isCancelCommandAvailable();
         } else {
-            return command.equals("reset") || getAvailableCommands().contains(command);
+            return getAvailableCommands().contains(command);
         }
     }
 
@@ -471,7 +472,7 @@ public class CommandExecutor {
         GameStateListener.setTimeout(timeout);
     }
 
-    private static void executeStartOver(String[] tokens) {
+    public static void executeStartOver(String[] tokens) {
         //Copying the functionality from VictoryScreen.update(), always skipping credits
         AbstractDungeon.unlocks.clear();
         Settings.isTrial = false;
@@ -597,6 +598,100 @@ public class CommandExecutor {
         return builder.toString();
     }
 
+    /**
+     * Enumerates all valid play commands for the current game state.
+     * @return A list of exact play command strings (e.g., "play 1", "play 2 0", "play 3 1")
+     */
+    private static ArrayList<String> getPlayCommands() {
+        ArrayList<String> commands = new ArrayList<>();
+        if (!isPlayCommandAvailable()) {
+            return commands;
+        }
 
+        ArrayList<AbstractCard> hand = AbstractDungeon.player.hand.group;
+        for (int cardIndex = 0; cardIndex < hand.size(); cardIndex++) {
+            AbstractCard card = hand.get(cardIndex);
+            int displayIndex = cardIndex + 1;
+
+            // Check if card requires a target
+            if (card.target == AbstractCard.CardTarget.ENEMY || card.target == AbstractCard.CardTarget.SELF_AND_ENEMY) {
+                // Enumerate all valid monster targets
+                for (int monsterIndex = 0; monsterIndex < AbstractDungeon.getCurrRoom().monsters.monsters.size(); monsterIndex++) {
+                    AbstractMonster monster = AbstractDungeon.getCurrRoom().monsters.monsters.get(monsterIndex);
+                    if (card.canUse(AbstractDungeon.player, monster)) {
+                        commands.add("play " + displayIndex + " " + monsterIndex);
+                    }
+                }
+            } else {
+                // Card doesn't require a target
+                if (card.canUse(AbstractDungeon.player, null)) {
+                    commands.add("play " + displayIndex);
+                }
+            }
+        }
+
+        return commands;
+    }
+
+    /**
+     * Enumerates all valid choose commands for the current game state.
+     * Returns only numeric index forms to avoid functional duplicates.
+     * @return A list of exact choose command strings (e.g., "choose 0", "choose 1", "choose 2")
+     */
+    private static ArrayList<String> getChooseCommands() {
+        ArrayList<String> commands = new ArrayList<>();
+        if (!isChooseCommandAvailable()) {
+            return commands;
+        }
+
+        ArrayList<String> validChoices = ChoiceScreenUtils.getCurrentChoiceList();
+
+        // Only add numeric index forms - text names are functional duplicates
+        for (int i = 0; i < validChoices.size(); i++) {
+            commands.add("choose " + i);
+        }
+
+        return commands;
+    }
+
+    /**
+     * Enumerates all valid potion commands for the current game state.
+     * @return A list of exact potion command strings (e.g., "potion use 0", "potion use 0 1", "potion discard 0")
+     */
+    private static ArrayList<String> getPotionCommands() {
+        ArrayList<String> commands = new ArrayList<>();
+        if (!isPotionCommandAvailable()) {
+            return commands;
+        }
+
+        for (int potionIndex = 0; potionIndex < AbstractDungeon.player.potionSlots; potionIndex++) {
+            AbstractPotion potion = AbstractDungeon.player.potions.get(potionIndex);
+
+            // Skip empty potion slots
+            if (potion instanceof PotionSlot) {
+                continue;
+            }
+
+            // Handle potion use commands
+            if (potion.canUse()) {
+                if (potion.targetRequired) {
+                    // Enumerate all valid monster targets
+                    for (int monsterIndex = 0; monsterIndex < AbstractDungeon.getCurrRoom().monsters.monsters.size(); monsterIndex++) {
+                        commands.add("potion use " + potionIndex + " " + monsterIndex);
+                    }
+                } else {
+                    // Potion doesn't require a target
+                    commands.add("potion use " + potionIndex);
+                }
+            }
+
+            // Handle potion discard commands
+            if (potion.canDiscard()) {
+                commands.add("potion discard " + potionIndex);
+            }
+        }
+
+        return commands;
+    }
 
 }
