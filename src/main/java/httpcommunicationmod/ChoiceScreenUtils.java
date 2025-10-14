@@ -69,6 +69,10 @@ public class ChoiceScreenUtils {
 
     public static ChoiceType getCurrentChoiceType() {
         if (!AbstractDungeon.isScreenUp) {
+            // During transitions, the current room may be null
+            if (AbstractDungeon.getCurrRoom() == null) {
+                return ChoiceType.NONE;
+            }
             if (AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.EVENT || (AbstractDungeon.getCurrRoom().event != null && AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMPLETE)) {
                 return ChoiceType.EVENT;
             } else if (AbstractDungeon.getCurrRoom() instanceof TreasureRoomBoss || AbstractDungeon.getCurrRoom() instanceof TreasureRoom) {
@@ -685,6 +689,13 @@ public class ChoiceScreenUtils {
 
     public static ArrayList<String> getMapScreenChoices() {
         ArrayList<String> choices = new ArrayList<>();
+
+        // Only allow navigation when room is complete
+        if (AbstractDungeon.getCurrRoom() != null
+                && AbstractDungeon.getCurrRoom().phase != AbstractRoom.RoomPhase.COMPLETE) {
+            return choices;
+        }
+
         MapRoomNode currMapNode = AbstractDungeon.getCurrMapNode();
         if(bossNodeAvailable()) {
             choices.add("boss");

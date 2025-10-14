@@ -106,7 +106,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         if (GameStateListener.checkForDungeonStateChange()) {
             mustSendGameState = true;
         }
-        if (AbstractDungeon.getCurrRoom().isBattleOver) {
+        if (AbstractDungeon.getCurrRoom() != null && AbstractDungeon.getCurrRoom().isBattleOver) {
             GameStateListener.signalTurnEnd();
         }
     }

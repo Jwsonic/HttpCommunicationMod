@@ -98,12 +98,14 @@ public class GameStateConverter {
         state.put("screen_name", AbstractDungeon.screen.name());
         state.put("is_screen_up", AbstractDungeon.isScreenUp);
         state.put("screen_type", ChoiceScreenUtils.getCurrentChoiceType());
-        state.put("room_phase", AbstractDungeon.getCurrRoom().phase.toString());
+        if (AbstractDungeon.getCurrRoom() != null) {
+            state.put("room_phase", AbstractDungeon.getCurrRoom().phase.toString());
+            state.put("room_type", AbstractDungeon.getCurrRoom().getClass().getSimpleName());
+        }
         state.put("action_phase", AbstractDungeon.actionManager.phase.toString());
         if(AbstractDungeon.actionManager.currentAction != null) {
             state.put("current_action", AbstractDungeon.actionManager.currentAction.getClass().getSimpleName());
         }
-        state.put("room_type", AbstractDungeon.getCurrRoom().getClass().getSimpleName());
         state.put("current_hp", AbstractDungeon.player.currentHealth);
         state.put("max_hp", AbstractDungeon.player.maxHealth);
         state.put("floor", AbstractDungeon.floorNum);
@@ -139,7 +141,7 @@ public class GameStateConverter {
         if(CommandExecutor.isChooseCommandAvailable()) {
             state.put("choice_list", ChoiceScreenUtils.getCurrentChoiceList());
         }
-        if(AbstractDungeon.getCurrRoom().phase.equals(AbstractRoom.RoomPhase.COMBAT)) {
+        if(AbstractDungeon.getCurrRoom() != null && AbstractDungeon.getCurrRoom().phase.equals(AbstractRoom.RoomPhase.COMBAT)) {
             state.put("combat_state", getCombatState());
         }
         state.put("screen_state", getScreenState());

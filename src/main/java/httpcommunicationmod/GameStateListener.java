@@ -100,6 +100,10 @@ public class GameStateListener {
         if (blocked) {
             return false;
         }
+        // During transitions, the current room may be null
+        if (AbstractDungeon.getCurrRoom() == null) {
+            return false;
+        }
         hasPresentedOutOfGameState = false;
         AbstractDungeon.CurrentScreen newScreen = AbstractDungeon.screen;
         boolean newScreenUp = AbstractDungeon.isScreenUp;
@@ -118,7 +122,7 @@ public class GameStateListener {
             return false;
         }
         // We are not ready to receive commands when it is not our turn, except for some pesky screens
-        if (inCombat && (!myTurn || AbstractDungeon.getMonsters().areMonstersBasicallyDead())) {
+        if (inCombat && ((!myTurn && !AbstractDungeon.actionManager.phase.equals(GameActionManager.Phase.WAITING_ON_USER)) || AbstractDungeon.getMonsters().areMonstersBasicallyDead())) {
             if (!newScreenUp) {
                 return false;
             }
@@ -128,7 +132,8 @@ public class GameStateListener {
         if ((currentRoom instanceof EventRoom
                 || currentRoom instanceof NeowRoom
                 || (currentRoom instanceof VictoryRoom && ((VictoryRoom) currentRoom).eType == VictoryRoom.EventType.HEART))
-                && AbstractDungeon.getCurrRoom().event.waitTimer != 0.0F) {
+                && AbstractDungeon.getCurrRoom().event.waitTimer != 0.0F
+                && newScreen != AbstractDungeon.CurrentScreen.MAP) {
             return false;
         }
         // The state has always changed in some way when one of these variables is different.

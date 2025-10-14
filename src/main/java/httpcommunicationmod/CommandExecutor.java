@@ -36,8 +36,8 @@ public class CommandExecutor {
         if(tokens.length == 0) {
             return false;
         }
-        if (!isCommandAvailable(tokens[0])) {
-            throw new InvalidCommandException("Invalid command: " + tokens[0] + ". Possible commands: " + getAvailableCommands());
+        if (!isCommandAvailable(command)) {
+            throw new InvalidCommandException("Invalid command: " + command + ". Possible commands: " + getAvailableCommands());
         }
         String command_tail = command.substring(tokens[0].length());
         switch(tokens[0]) {
