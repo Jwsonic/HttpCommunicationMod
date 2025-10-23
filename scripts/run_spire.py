@@ -32,7 +32,6 @@ class GameConfig:
         self.mod_list = data.get("mod_list", [])
         self.http_mod_host = data.get("http_mod_host", "localhost")
         self.http_mod_port = int(data.get("http_mod_port", 8080))
-        self.agent_log_dir = data.get("agent_log_dir")
         self.skip_launcher = data.get("skip_launcher", False)
         self.skip_intro = data.get("skip_intro", False)
 
@@ -168,10 +167,9 @@ class GameProcess:
             "HTTP_MOD_PORT": str(self.config.http_mod_port),
             "HTTP_MOD_HOST": self.config.http_mod_host,
             "GAME_SESSION_ID": self.session_id,
+            "AGENT_LOG_DIR": str(self.config.log_dir.resolve()),
+            "SPIRE_SEED": str(self.config.seed),
         }
-
-        if self.config.agent_log_dir:
-            env["AGENT_LOG_DIR"] = str(self.config.agent_log_dir)
 
         return env
 
@@ -237,7 +235,6 @@ seed = "A0"
 mod_list = ["basemod", "HttpCommunicationMod", "superfastmode"]
 http_mod_host = "localhost"
 http_mod_port = 8080
-agent_log_dir = "./agent_logs"
 skip_launcher = true
 skip_intro = true
         """)

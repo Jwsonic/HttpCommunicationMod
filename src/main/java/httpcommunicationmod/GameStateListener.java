@@ -7,8 +7,11 @@ import com.megacrit.cardcrawl.neow.NeowRoom;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.EventRoom;
 import com.megacrit.cardcrawl.rooms.VictoryRoom;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class GameStateListener {
+    private static final Logger logger = LogManager.getLogger(GameStateListener.class.getName());
     private static TurnStateDetector detector = new TurnStateDetector();
     private static boolean waitingForCommand = false;
     private static boolean hasPresentedOutOfGameState = false;
@@ -134,6 +137,20 @@ public class GameStateListener {
      * @return Whether the main menu has just been entered.
      */
     public static boolean checkForMenuStateChange() {
+        // Check if game ended (death or victory)
+        if (CommandExecutor.isInDungeon() &&
+            (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.DEATH ||
+             AbstractDungeon.screen == AbstractDungeon.CurrentScreen.VICTORY)) {
+            // Log the final game state (which includes victory flag)
+            String finalState = GameStateConverter.getCommunicationState();
+            JSONLLogger.logState(finalState);
+
+            // End the game log
+            JSONLLogger.endGame();
+
+            logger.info("Game ended - logged final state and closed log");
+        }
+
         boolean stateChange = false;
         if (!hasPresentedOutOfGameState && CardCrawlGame.mode == CardCrawlGame.GameMode.CHAR_SELECT && CardCrawlGame.mainMenuScreen != null) {
             stateChange = true;
@@ -168,11 +185,9 @@ public class GameStateListener {
                 waitingForCommand = true;
                 detector.updatePreviousState(snapshot);
 
-                // Complete any pending action log with the new state
-                if (ActionLogger.hasPendingAction()) {
-                    String stateAfter = GameStateConverter.getCommunicationState();
-                    ActionLogger.completeActionLog(stateAfter);
-                }
+                // Log the current game state
+                String currentState = GameStateConverter.getCommunicationState();
+                ActionLogger.completeActionLog(currentState);
 
                 // Trigger agent decision if enabled
                 if (agentManager != null && agentManager.isEnabled()) {

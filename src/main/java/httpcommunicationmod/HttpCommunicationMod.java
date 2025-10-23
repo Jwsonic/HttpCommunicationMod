@@ -134,7 +134,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         settingsPanel.addUIElement(logLabel);
 
         ModLabel envVarLabel = new ModLabel(
-                "Configuration via environment variable: AGENT_LOG_PATH (directory for JSONL logs)",
+                "Configuration via environment variable: AGENT_LOG_DIR (directory for JSONL logs)",
                 350, 500, Settings.CREAM_COLOR, FontHelper.charDescFont,
                 settingsPanel, modLabel -> {
                 });
@@ -164,8 +164,20 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         java.util.Random rand = new java.util.Random();
         AbstractPlayer.PlayerClass selectedClass = classes[rand.nextInt(classes.length)];
 
-        // Generate seed
-        long seed = SeedHelper.generateUnoffensiveSeed(new Random(System.nanoTime()));
+        // Generate seed - check for SPIRE_SEED environment variable first
+        long seed;
+        String envSeed = System.getenv("SPIRE_SEED");
+        if (envSeed != null && !envSeed.isEmpty()) {
+            try {
+                seed = Long.parseLong(envSeed);
+                logger.info("Using seed from SPIRE_SEED environment variable: " + seed);
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid SPIRE_SEED value '" + envSeed + "', generating random seed");
+                seed = SeedHelper.generateUnoffensiveSeed(new Random(System.nanoTime()));
+            }
+        } else {
+            seed = SeedHelper.generateUnoffensiveSeed(new Random(System.nanoTime()));
+        }
         Settings.seed = seed;
         Settings.seedSet = false;
         AbstractDungeon.generateSeeds();
@@ -201,7 +213,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         if (agentManager != null) {
             agentManager.disable();
         }
-        JSONLLogger.closeCurrentLog();
+        JSONLLogger.endGame();
     }
 
     public static String getCurrentGameState() {

@@ -20,8 +20,13 @@ import java.util.Map;
 
 /**
  * Writes gameplay logs in JSONL format (JSON Lines).
- * Creates one .jsonl file per game with filename format: {timestamp}-{seed}.jsonl
- * Each line in the file is a JSON object representing a (state_before, action, state_after) tuple.
+ * Creates one .jsonl file per game with filename format: {timestamp}.jsonl
+ * Format: metadata header, then alternating game_state and action lines.
+ * First line: {"type":"game_start","seed":...,"timestamp":"..."}
+ * Second line: initial game state
+ * Then alternates: action, game_state, action, game_state, ...
+ * Final line before game_end: final game state
+ * Last line: {"type":"game_end","timestamp":"..."}
  */
 public class JSONLLogger {
     private static final Logger logger = LogManager.getLogger(JSONLLogger.class.getName());
@@ -29,20 +34,25 @@ public class JSONLLogger {
     private static BufferedWriter writer = null;
     private static String currentLogFilePath = null;
     private static final DateTimeFormatter filenameFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static long currentSeed = 0;
 
     /**
      * Starts a new log file for a new game.
-     * File will be created in the AGENT_LOG_PATH directory with format: {timestamp}-{seed}.jsonl
+     * File will be created in the AGENT_LOG_DIR directory with format: {timestamp}.jsonl
+     * Writes metadata header line: {"type": "game_start", "seed": <seed>, "timestamp": "..."}
+     * Note: Initial game state should be logged separately after calling this method.
      *
      * @param seed The game seed
      */
     public static void startNewGame(long seed) {
         closeCurrentLog();
 
-        String logDir = System.getenv("AGENT_LOG_PATH");
+        currentSeed = seed;
+
+        String logDir = System.getenv("AGENT_LOG_DIR");
         if (logDir == null || logDir.isEmpty()) {
             logDir = ".";
-            logger.warn("AGENT_LOG_PATH not set, using current directory");
+            logger.warn("AGENT_LOG_DIR not set, using current directory");
         }
 
         try {
@@ -53,13 +63,24 @@ public class JSONLLogger {
                 logger.info("Created log directory: " + logDir);
             }
 
-            // Generate filename: timestamp-seed.jsonl
+            // Generate filename: timestamp.jsonl (no seed in filename)
             String timestamp = LocalDateTime.now().format(filenameFormatter);
-            String filename = timestamp + "-" + seed + ".jsonl";
+            String filename = timestamp + ".jsonl";
             currentLogFilePath = Paths.get(logDir, filename).toString();
 
             // Create new writer
             writer = new BufferedWriter(new FileWriter(currentLogFilePath, false));
+
+            // Write metadata header line
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("type", "game_start");
+            metadata.put("seed", seed);
+            metadata.put("timestamp", LocalDateTime.now().toString());
+            String metadataLine = gson.toJson(metadata);
+            writer.write(metadataLine);
+            writer.newLine();
+            writer.flush();
+
             logger.info("Started new JSONL log file: " + currentLogFilePath);
 
         } catch (IOException e) {
@@ -70,43 +91,85 @@ public class JSONLLogger {
     }
 
     /**
-     * Logs a single action tuple: (state_before, action, state_after)
+     * Logs a game state as a JSON line.
      *
-     * @param stateBefore The game state before the action (JSON string)
-     * @param action The action taken
-     * @param stateAfter The game state after the action (JSON string)
+     * @param gameState The game state as a JSON string
      */
-    public static void logAction(String stateBefore, String action, String stateAfter) {
+    public static void logState(String gameState) {
+        if (writer == null) {
+            logger.warn("Cannot log state - no log file open");
+            return;
+        }
+
+        try {
+            writer.write(gameState);
+            writer.newLine();
+            writer.flush(); // Flush immediately for real-time logging
+
+            logger.debug("Logged game state");
+
+        } catch (IOException e) {
+            logger.error("Failed to write state to JSONL log: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Logs an action as a JSON line.
+     *
+     * @param action The action as a JSON string
+     */
+    public static void logAction(String action) {
         if (writer == null) {
             logger.warn("Cannot log action - no log file open");
             return;
         }
 
         try {
-            // Create the JSON object for this entry
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("state_before", stateBefore);
-            entry.put("action", action);
-            entry.put("state_after", stateAfter);
-            entry.put("timestamp", LocalDateTime.now().toString());
-
-            // Write as a single line of JSON
-            String jsonLine = gson.toJson(entry);
-            writer.write(jsonLine);
+            writer.write(action);
             writer.newLine();
             writer.flush(); // Flush immediately for real-time logging
 
             logger.debug("Logged action: " + action);
 
         } catch (IOException e) {
-            logger.error("Failed to write to JSONL log: " + e.getMessage(), e);
+            logger.error("Failed to write action to JSONL log: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Closes the current log file.
+     * Ends the current game log by writing a game_end metadata line, then closes the file.
+     * Should be called when the game ends (death or victory).
      */
-    public static void closeCurrentLog() {
+    public static void endGame() {
+        if (writer == null) {
+            logger.warn("Cannot end game - no log file open");
+            return;
+        }
+
+        try {
+            // Write game_end metadata line
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("type", "game_end");
+            metadata.put("timestamp", LocalDateTime.now().toString());
+            String metadataLine = gson.toJson(metadata);
+            writer.write(metadataLine);
+            writer.newLine();
+            writer.flush();
+
+            logger.info("Wrote game_end metadata to: " + currentLogFilePath);
+
+        } catch (IOException e) {
+            logger.error("Failed to write game_end metadata: " + e.getMessage(), e);
+        }
+
+        closeCurrentLog();
+    }
+
+    /**
+     * Closes the current log file without writing game_end metadata.
+     * Typically called internally or when starting a new game.
+     */
+    private static void closeCurrentLog() {
         if (writer != null) {
             try {
                 writer.close();

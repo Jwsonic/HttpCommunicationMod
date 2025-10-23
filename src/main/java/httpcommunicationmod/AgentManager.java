@@ -85,9 +85,8 @@ public class AgentManager {
             if (success) {
                 GameStateListener.registerCommandExecution();
 
-                // Log the action tuple after a brief delay to get the resulting state
-                // This will be handled by ActionLogger
-                ActionLogger.logAction(stateBefore, chosenAction);
+                // Log the action as a JSON string
+                ActionLogger.logAction("{\"action\":\"" + chosenAction.replace("\"", "\\\"") + "\"}");
             } else {
                 logger.error("Failed to execute action: " + chosenAction);
             }
