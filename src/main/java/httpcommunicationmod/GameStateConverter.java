@@ -34,10 +34,20 @@ import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
 import httpcommunicationmod.patches.UpdateBodyTextPatch;
 
 import java.lang.reflect.Field;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 
 public class GameStateConverter {
+
+    private static long stateIdCounter = 0;
+
+    /**
+     * Resets the state ID counter for a new game run.
+     */
+    public static void resetStateId() {
+        stateIdCounter = 0;
+    }
 
     /**
      * Creates a JSON representation of the status of HttpCommunicationMod that will be sent to the external process.
@@ -94,6 +104,18 @@ public class GameStateConverter {
      */
     private static HashMap<String, Object> getGameState() {
         HashMap<String, Object> state = new HashMap<>();
+
+        // Add state metadata
+        state.put("state_id", stateIdCounter++);
+        state.put("timestamp", LocalDateTime.now().toString());
+
+        // Add turn number (0 if not in combat)
+        int turnNumber = 0;
+        if (AbstractDungeon.getCurrRoom() != null &&
+            AbstractDungeon.getCurrRoom().phase.equals(AbstractRoom.RoomPhase.COMBAT)) {
+            turnNumber = GameActionManager.turn;
+        }
+        state.put("turn_number", turnNumber);
 
         state.put("screen_name", AbstractDungeon.screen.name());
         state.put("is_screen_up", AbstractDungeon.isScreenUp);
