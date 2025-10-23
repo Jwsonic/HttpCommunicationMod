@@ -1,0 +1,9 @@
+spire_resource_dir = "/Users/john/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources"
+mts_jar = "/Users/john/Library/Application Support/Steam/steamapps/common/SlayTheSpire/SlayTheSpire.app/Contents/Resources/ModTheSpire.jar"
+log_dir = "./logs"
+seed = "A0"
+mod_list = ["basemod", "HttpCommunicationMod"]
+http_mod_host = "localhost"
+http_mod_port = 8080
+skip_launcher = true
+skip_intro = true
