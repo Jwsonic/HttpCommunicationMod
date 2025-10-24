@@ -25,11 +25,11 @@ import org.apache.logging.log4j.Logger;
  *
  * <p><strong>Endless Runs:</strong> When endless runs are enabled (via the {@code ENDLESS_RUNS}
  * environment variable), the controller will automatically restart games after they end. The first
- * game is always started regardless of the endless runs setting. Subsequent games are started only
- * if endless runs are enabled and the previous game ended (reached death or victory screen).
+ * game is always started when the main menu is reached for the first time. Subsequent games are
+ * started only if endless runs are enabled.
  *
- * <p><strong>Thread Safety:</strong> This class maintains mutable state (hasStartedFirstGame,
- * previousPhase) but is designed to be used in a single-threaded game loop context. If used in
+ * <p><strong>Thread Safety:</strong> This class maintains mutable state (hasStartedFirstGame)
+ * but is designed to be used in a single-threaded game loop context. If used in
  * a multi-threaded environment, synchronization would be required.
  *
  * @author HttpCommunicationMod Team
@@ -41,7 +41,6 @@ public class GameLifecycleController implements PhaseChangeListener {
 
     private final boolean endlessRunsEnabled;
     private boolean hasStartedFirstGame = false;
-    private GamePhase previousPhase = GamePhase.UNKNOWN;
 
     /**
      * Constructs a new GameLifecycleController instance.
@@ -83,9 +82,6 @@ public class GameLifecycleController implements PhaseChangeListener {
      *   <li>Other phases: No special lifecycle handling required</li>
      * </ul>
      *
-     * <p>After handling the appropriate actions, the {@code newPhase} is stored as the previous phase
-     * for future transition decisions.
-     *
      * @param oldPhase the previous game phase
      * @param newPhase the new game phase after the transition
      */
@@ -104,9 +100,6 @@ public class GameLifecycleController implements PhaseChangeListener {
                 // No special handling for other phases
                 break;
         }
-
-        // Always update previousPhase after handling to track state for next transition
-        previousPhase = newPhase;
     }
 
     /**
@@ -142,59 +135,37 @@ public class GameLifecycleController implements PhaseChangeListener {
      *
      * <p>This method determines whether a new game should be started based on:
      * <ul>
-     *   <li>Whether the first game has been started yet</li>
-     *   <li>Whether we just came from a game end (death or victory screen)</li>
-     *   <li>Whether endless runs are enabled in the configuration</li>
+     *   <li>Whether the first game has been started yet (always start first game)</li>
+     *   <li>Whether endless runs are enabled for subsequent games</li>
      * </ul>
      *
-     * <p><strong>Decision Logic:</strong>
+     * <p><strong>Decision Logic:</strong> Start a new game if:
      * <ul>
-     *   <li>If the first game has never been started: Always start the first game</li>
-     *   <li>If endless runs are enabled AND the previous phase was a game end: Start a new game</li>
-     *   <li>Otherwise: Do not start a new game</li>
+     *   <li>The first game has never been started, OR</li>
+     *   <li>Endless runs are enabled</li>
      * </ul>
      *
-     * <p>The {@link #hasStartedFirstGame} flag is only set to {@code true} after successfully
+     * <p><strong>Simplified Approach:</strong> Since this is a fully automated bot with no human
+     * interaction, we do not need to track previous phase states. We simply decide based on whether
+     * we're starting the first game or have endless runs enabled. This decouples the logic from
+     * fragile phase history tracking and makes the decision deterministic and robust.
+     *
+     * <p>The {@link #hasStartedFirstGame} flag is set to {@code true} after successfully
      * starting the first game, ensuring that even if game startup fails, the next main menu
      * transition will attempt to start a game again.
      */
     private void handleMainMenuReached() {
-        // Check if we just came from a game end (death or victory)
-        boolean justEndedGame = (previousPhase == GamePhase.DEATH_SCREEN ||
-                                 previousPhase == GamePhase.VICTORY_SCREEN);
+        logger.info("Reached main menu. First game started: {}, Endless runs: {}",
+                hasStartedFirstGame, endlessRunsEnabled);
 
-        // Log detailed state information for diagnostics
-        logger.info("Reached main menu. Previous phase: {} (game end: {}), First game started: {}, Endless runs: {}",
-                previousPhase, justEndedGame, hasStartedFirstGame, endlessRunsEnabled);
-
-        // Debug: Inspect actual game state to verify phase detection accuracy
-        try {
-            CardCrawlGame.GameMode currentMode = CardCrawlGame.mode;
-            AbstractDungeon.CurrentScreen dungeonScreen = AbstractDungeon.screen;
-            logger.debug("Actual game state - CardCrawlGame.mode: {}, AbstractDungeon.screen: {}",
-                currentMode, dungeonScreen);
-        } catch (Exception e) {
-            logger.debug("Could not inspect game state (may be null during transition): {}", e.getMessage());
-        }
-
-        // Decide if we should start a new game
-        boolean shouldStart = false;
-
-        if (!hasStartedFirstGame) {
-            // Always start the first game
-            shouldStart = true;
-            logger.info("Starting first game");
-        } else if (endlessRunsEnabled && justEndedGame) {
-            // Restart if endless runs enabled and we just finished a game
-            shouldStart = true;
-            logger.info("Endless runs enabled - restarting game");
-        } else {
-            logger.info("Not starting game (endless runs disabled or didn't just finish game)");
-        }
-
-        if (shouldStart) {
+        // Simplified decision: start if this is the first game OR endless runs are enabled
+        if (!hasStartedFirstGame || endlessRunsEnabled) {
+            logger.info("Starting new game - First game: {}, Endless runs: {}",
+                    !hasStartedFirstGame, endlessRunsEnabled);
             startNewGame();
             hasStartedFirstGame = true;
+        } else {
+            logger.info("Not starting game (endless runs disabled and already played first game)");
         }
     }
 

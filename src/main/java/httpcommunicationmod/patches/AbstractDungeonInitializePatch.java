@@ -41,6 +41,7 @@ public class AbstractDungeonInitializePatch {
      * to confirm that the dungeon is fully initialized and playable:
      * - currMapNode != null: The map has been generated and the dungeon has a valid starting node
      * - player != null: The player has been instantiated and is ready for gameplay
+     * - Screen must be playable (not a terminal screen like DEATH, VICTORY, UNLOCK, or NEOW_UNLOCK)
      *
      * When both conditions are met, notifies the GameStateTracker of the IN_DUNGEON phase transition. Since
      * AbstractDungeon uses static fields for its map and player state, no instance parameter is needed.
@@ -51,16 +52,39 @@ public class AbstractDungeonInitializePatch {
      */
     @SpirePostfixPatch
     public static void Postfix() {
-        // Both conditions must be true to confirm full dungeon initialization
+        // Check initialization conditions
         boolean mapNodeExists = AbstractDungeon.currMapNode != null;
         boolean playerExists = AbstractDungeon.player != null;
+        boolean screenIsPlayable = isPlayableDungeonScreen();
 
-        if (mapNodeExists && playerExists) {
-            logger.trace("Dungeon fully initialized (currMapNode and player both exist) - notifying IN_DUNGEON phase");
+        // All conditions must be true to confirm full dungeon initialization
+        if (mapNodeExists && playerExists && screenIsPlayable) {
+            logger.trace("Dungeon fully initialized (currMapNode, player, and playable screen all valid) - notifying IN_DUNGEON phase");
             GameStateTracker.getInstance().notifyPhaseChange(GamePhase.IN_DUNGEON);
         } else {
-            logger.trace("Dungeon initialization check - currMapNode: {}, player: {}",
-                mapNodeExists ? "exists" : "null", playerExists ? "exists" : "null");
+            logger.trace("Dungeon initialization check - currMapNode: {}, player: {}, screen: {}",
+                mapNodeExists ? "exists" : "null",
+                playerExists ? "exists" : "null",
+                screenIsPlayable ? "playable" : AbstractDungeon.screen.name());
         }
+    }
+
+    /**
+     * Validates that the current screen state is a playable dungeon screen.
+     *
+     * Excludes terminal screens (game-end states) that should not be considered as valid IN_DUNGEON states:
+     * - DEATH: Game over due to player death
+     * - VICTORY: Game over due to winning
+     * - UNLOCK: Post-game unlocks screen
+     * - NEOW_UNLOCK: Neow event unlocks screen
+     *
+     * @return true if the current screen is not a terminal screen; false if in a game-end state
+     */
+    private static boolean isPlayableDungeonScreen() {
+        AbstractDungeon.CurrentScreen currentScreen = AbstractDungeon.screen;
+        return currentScreen != AbstractDungeon.CurrentScreen.DEATH
+            && currentScreen != AbstractDungeon.CurrentScreen.VICTORY
+            && currentScreen != AbstractDungeon.CurrentScreen.UNLOCK
+            && currentScreen != AbstractDungeon.CurrentScreen.NEOW_UNLOCK;
     }
 }
