@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" shutdownHook="disable">
+    <Appenders>
+        <!-- Console appender for immediate feedback -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss,SSS} [%-5level] %logger{36}> %msg%n"/>
+        </Console>
+
+        <!-- File appender - overwrites on each run -->
+        <File name="File" fileName="${env:LOG_DIR}/spire_collector.log" append="false" immediateFlush="true" bufferedIO="true" bufferSize="8192">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss,SSS} [%-5level] %logger{36}> %msg%n"/>
+        </File>
+    </Appenders>
+
+    <Loggers>
+        <!-- Set httpcommunicationmod package to DEBUG for detailed diagnostics -->
+        <Logger name="httpcommunicationmod" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Logger>
+
+        <!-- Specific patches at TRACE level for maximum detail -->
+        <Logger name="httpcommunicationmod.patches" level="TRACE" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Logger>
+
+        <!-- GameStateTracker at TRACE to see idempotent rejections -->
+        <Logger name="httpcommunicationmod.GameStateTracker" level="TRACE" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Logger>
+
+        <!-- Root logger at INFO level for other components -->
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+    </Loggers>
+</Configuration>

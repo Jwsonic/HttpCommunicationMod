@@ -38,7 +38,7 @@ public class JSONLLogger {
 
     /**
      * Starts a new log file for a new game.
-     * File will be created in the AGENT_LOG_DIR directory with format: {timestamp}.jsonl
+     * File will be created in the LOG_DIR directory with format: {timestamp}.jsonl
      * Writes metadata header line: {"type": "game_start", "seed": <seed>, "timestamp": "..."}
      * Note: Initial game state should be logged separately after calling this method.
      *
@@ -49,10 +49,10 @@ public class JSONLLogger {
 
         currentSeed = seed;
 
-        String logDir = System.getenv("AGENT_LOG_DIR");
+        String logDir = System.getenv("LOG_DIR");
         if (logDir == null || logDir.isEmpty()) {
             logDir = ".";
-            logger.warn("AGENT_LOG_DIR not set, using current directory");
+            logger.warn("LOG_DIR not set, using current directory");
         }
 
         try {

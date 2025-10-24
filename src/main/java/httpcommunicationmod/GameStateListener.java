@@ -14,7 +14,6 @@ public class GameStateListener {
     private static final Logger logger = LogManager.getLogger(GameStateListener.class.getName());
     private static TurnStateDetector detector = new TurnStateDetector();
     private static boolean waitingForCommand = false;
-    private static boolean hasPresentedOutOfGameState = false;
     private static AgentManager agentManager = null;
 
     /**
@@ -84,7 +83,6 @@ public class GameStateListener {
     public static void resetStateVariables() {
         detector.resetStateVariables();
         waitingForCommand = false;
-        hasPresentedOutOfGameState = false;
     }
 
     /**
@@ -131,30 +129,17 @@ public class GameStateListener {
     }
 
     /**
-     * Detects whether the state of the game menu has changed. Right now, this only occurs when you first enter the
-     * menu, either after starting Slay the Spire for the first time, or after ending a game and returning to the menu.
+     * Detects whether the state of the game menu has changed.
      *
      * @return Whether the main menu has just been entered.
      */
     public static boolean checkForMenuStateChange() {
-        // Check if game ended (death or victory)
-        if (CommandExecutor.isInDungeon() &&
-            (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.DEATH ||
-             AbstractDungeon.screen == AbstractDungeon.CurrentScreen.VICTORY)) {
-            // Log the final game state (which includes victory flag)
-            String finalState = GameStateConverter.getCommunicationState();
-            JSONLLogger.logState(finalState);
-
-            // End the game log
-            JSONLLogger.endGame();
-
-            logger.info("Game ended - logged final state and closed log");
-        }
+        // Game end detection is now handled by AbstractDungeonUpdatePatch and GameLifecycleController
+        // This method only detects menu state changes for state publishing
 
         boolean stateChange = false;
-        if (!hasPresentedOutOfGameState && CardCrawlGame.mode == CardCrawlGame.GameMode.CHAR_SELECT && CardCrawlGame.mainMenuScreen != null) {
+        if (CardCrawlGame.mode == CardCrawlGame.GameMode.CHAR_SELECT && CardCrawlGame.mainMenuScreen != null) {
             stateChange = true;
-            hasPresentedOutOfGameState = true;
         }
         if (stateChange) {
             waitingForCommand = true;
@@ -177,7 +162,6 @@ public class GameStateListener {
                 return false;
             }
 
-            hasPresentedOutOfGameState = false;
             GameStateSnapshot snapshot = createSnapshot();
             stateChange = detector.detectStateChange(snapshot);
 

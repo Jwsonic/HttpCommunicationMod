@@ -30,10 +30,9 @@ class GameConfig:
         self.log_dir = Path(data.get("log_dir", "./logs"))
         self.seed = data.get("seed", "A0")
         self.mod_list = data.get("mod_list", [])
-        self.http_mod_host = data.get("http_mod_host", "localhost")
-        self.http_mod_port = int(data.get("http_mod_port", 8080))
         self.skip_launcher = data.get("skip_launcher", False)
         self.skip_intro = data.get("skip_intro", False)
+        self.endless_runs = data.get("endless_runs", False)
 
     @classmethod
     def from_toml(cls, toml_path: Path) -> "GameConfig":
@@ -77,11 +76,6 @@ class GameProcess:
         self.session_id = session_id
         self.config = config
         self.process: Optional[asyncio.subprocess.Process] = None
-        self.stdout_task: Optional[asyncio.Task] = None
-        self.stderr_task: Optional[asyncio.Task] = None
-
-        # Set up logger for this game session
-        self.logger = self._setup_logger()
 
     async def start(self) -> None:
         """Start the Java process with proper configuration."""
@@ -96,15 +90,9 @@ class GameProcess:
         # Start the process
         self.process = await asyncio.create_subprocess_exec(
             *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
             env=env,
             cwd=str(self.config.spire_resource_dir),
         )
-
-        # Start async tasks to capture output
-        self.stdout_task = asyncio.create_task(self._capture_stdout())
-        self.stderr_task = asyncio.create_task(self._capture_stderr())
 
     async def stop(self) -> None:
         """Gracefully stop the process (SIGTERM)."""
@@ -164,62 +152,13 @@ class GameProcess:
             Dictionary of environment variables
         """
         env = {
-            "HTTP_MOD_PORT": str(self.config.http_mod_port),
-            "HTTP_MOD_HOST": self.config.http_mod_host,
             "GAME_SESSION_ID": self.session_id,
-            "AGENT_LOG_DIR": str(self.config.log_dir.resolve()),
+            "LOG_DIR": str(self.config.log_dir.resolve()),
             "SPIRE_SEED": str(self.config.seed),
+            "ENDLESS_RUNS": str(self.config.endless_runs).lower(),
         }
 
         return env
-
-    def _setup_logger(self) -> logging.Logger:
-        """
-        Set up logger for this game session.
-
-        Returns:
-            Configured logger instance
-        """
-        logger = logging.getLogger(f"game.{self.session_id}")
-        logger.setLevel(logging.INFO)
-        logger.propagate = False  # Don't propagate to root logger
-
-        # Create log file path
-        log_path = self.config.log_dir / f"spire_game_{self.session_id}.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Set up rotating file handler (10MB per file, keep 5 backups)
-        handler = RotatingFileHandler(
-            log_path, maxBytes=10 * 1024 * 1024, backupCount=5
-        )
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        )
-        logger.addHandler(handler)
-
-        return logger
-
-    async def _capture_stdout(self) -> None:
-        """Capture stdout to log file using logger."""
-        if not self.process or not self.process.stdout:
-            return
-
-        while True:
-            line = await self.process.stdout.readline()
-            if not line:
-                break
-            self.logger.info(line.decode().rstrip())
-
-    async def _capture_stderr(self) -> None:
-        """Capture stderr to log file using logger."""
-        if not self.process or not self.process.stderr:
-            return
-
-        while True:
-            line = await self.process.stderr.readline()
-            if not line:
-                break
-            self.logger.error(line.decode().rstrip())
 
 
 async def main():
@@ -233,8 +172,6 @@ mts_jar = "/path/to/ModTheSpire.jar"
 log_dir = "./logs"
 seed = "A0"
 mod_list = ["basemod", "HttpCommunicationMod", "superfastmode"]
-http_mod_host = "localhost"
-http_mod_port = 8080
 skip_launcher = true
 skip_intro = true
         """)
@@ -259,7 +196,6 @@ skip_intro = true
     session_id = str(uuid.uuid4())
 
     print(f"Starting game session: {session_id}")
-    print(f"Log file: {config.log_dir / f'spire_game_{session_id}.log'}")
 
     # Create and start the game process
     game = GameProcess(session_id, config)

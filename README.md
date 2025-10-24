@@ -278,14 +278,6 @@ The `/command` endpoint accepts text-based commands to control the game. The `av
 
 The mod uses environment variables for configuration (no config files are created or used):
 
-- **`HTTP_MOD_PORT`**: Optional. Specifies the port for the web server. If not set, defaults to 8080.
-  - Example: `HTTP_MOD_PORT=9000`
-  - Must be a valid integer port number
-
-- **`HTTP_MOD_HOST`**: Optional. Specifies the host/IP address for the web server. If not set, defaults to localhost.
-  - Example: `HTTP_MOD_HOST=0.0.0.0` (bind to all interfaces)
-  - Example: `HTTP_MOD_HOST=127.0.0.1` (localhost only)
-
 - **`HTTP_MOD_LOG_PATH`**: Optional. Specifies the path for logging game state and commands. If not set, defaults to `http_mod.log` in the current directory.
   - Example: `HTTP_MOD_LOG_PATH=/path/to/custom/logfile.log`
   - Supports absolute paths and will create necessary directories
@@ -438,8 +430,6 @@ curl http://localhost:8080/health
 - Set `verbose=false` in config to reduce log output
 
 ### Common Issues
-- **Connection refused**: Check that the mod is loaded and the server started successfully
-- **Port in use**: Set the `HTTP_MOD_PORT` environment variable to a different port
 - **Command errors**: Check the HTTP response JSON for detailed error messages
 - **State not updating**: Ensure you're polling `/state` after commands that change game state
 - **Configuration not working**: Remember this mod uses environment variables, not config files

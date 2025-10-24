@@ -33,8 +33,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     private static ArrayList<OnStateChangeSubscriber> onStateChangeSubscribers;
 
     private static AgentManager agentManager;
-    private static boolean waitingForMainMenu = true;
-    private static boolean gameStarted = false;
+    private static GameLifecycleController lifecycleController;
 
     public HttpCommunicationMod() {
         BaseMod.subscribe(this);
@@ -42,6 +41,11 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         HttpCommunicationMod.subscribe(this);
 
         initializeAgent();
+        // Initialize event-driven lifecycle system
+        GameStateTracker.getInstance(); // Ensure singleton is initialized
+        lifecycleController = new GameLifecycleController();
+        GameStateTracker.getInstance().addListener(lifecycleController);
+        logger.info("Lifecycle system initialized with event-driven architecture");
     }
 
     public static void initialize() {
@@ -84,14 +88,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
     }
 
     public void receivePostUpdate() {
-        // Check for main menu and auto-start game
-        if (waitingForMainMenu && CardCrawlGame.mode == CardCrawlGame.GameMode.CHAR_SELECT &&
-            CardCrawlGame.mainMenuScreen != null && !gameStarted) {
-            logger.info("Main menu detected - starting game automatically");
-            startGame();
-            waitingForMainMenu = false;
-            gameStarted = true;
-        }
+        // Game lifecycle (start/restart) is now handled by patches and GameLifecycleController
 
         if (!mustSendGameState && GameStateListener.checkForMenuStateChange()) {
             mustSendGameState = true;
@@ -134,7 +131,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         settingsPanel.addUIElement(logLabel);
 
         ModLabel envVarLabel = new ModLabel(
-                "Configuration via environment variable: AGENT_LOG_DIR (directory for JSONL logs)",
+                "Configuration via environment variable: LOG_DIR (directory for all logs)",
                 350, 500, Settings.CREAM_COLOR, FontHelper.charDescFont,
                 settingsPanel, modLabel -> {
                 });
@@ -151,7 +148,7 @@ public class HttpCommunicationMod implements PostInitializeSubscriber, PostUpdat
         logger.info("Agent system initialized");
     }
 
-    private void startGame() {
+    static void startGame() {
         logger.info("Starting new game...");
 
         // Choose a random character
